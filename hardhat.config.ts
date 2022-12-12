@@ -15,10 +15,6 @@ const config: HardhatUserConfig = {
     networks: {
         hardhat: {
         },
-        goerli: {
-            url: <string>(process.env.GOERLI_URL),
-            accounts: [<string>(process.env.PRIVATE_KEY_TEST)]
-        }
     },
     etherscan: {
         apiKey: process.env.ETHERSCAN_API_KEY
