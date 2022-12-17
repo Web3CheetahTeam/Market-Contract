@@ -181,6 +181,10 @@ contract FeeHandle is Admin, IFeeHandler {
         address _token,
         uint256 _fee
     ) external {
+        if (_fee == 0) {
+            return;
+        }
+
         address from_ = msg.sender;
         ChargingItem memory item_ = collectionChargingItem[_collection];
         (
@@ -294,15 +298,6 @@ contract FeeHandle is Admin, IFeeHandler {
             _platformRatio + _projectRatio + _ipRatio < ratio,
             "FeeHanle: total fee exceed ratio"
         );
-
-        // (bool success_, bytes memory res_) = _collection.staticcall(
-        //     abi.encodeWithSignature("owner")
-        // );
-        // require(success_, "Static call owner failed");
-        // require(
-        //     address(bytes20(res_)) == msg.sender,
-        //     "Not the owner of the contract"
-        // );
 
         ChargingItem memory item_ = ChargingItem({
             platformRatio: _platformRatio,
