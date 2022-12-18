@@ -21,9 +21,14 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
     // user => (slat => bool)
     mapping(address => mapping(uint256 => bool)) public canceled;
 
+    struct OrderState {
+        bool ended;
+        uint64 quantity;
+    }
+
     // quantity of buy or sell
-    // (salt => quantity)
-    mapping(uint256 => uint256) public quantitys;
+    // (salt => OrderState)
+    mapping(uint256 => OrderState) public usedOrderState;
 
     event SetRoyaltyContract(address indexed feeHandleContract);
     event SetWhiteList(address[] users, bool[] list);
@@ -40,9 +45,14 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
         _;
     }
 
-    modifier checkTime(uint256 _startTime, uint256 _endTime) {
-        require(block.timestamp >= _startTime, "Order not started");
-        require(block.timestamp <= _endTime, "Order ended");
+    modifier checkOrder(OrderParameter memory _order, uint64 _quantity) {
+        require(_quantity > 0, "quantity must be greater than 0");
+        require(block.timestamp >= _order.startTime, "Order not started");
+        require(block.timestamp <= _order.endTime, "Order ended");
+        require(!usedOrderState[_order.salt].ended, "Order used");
+        require(
+            _order.quantity >= usedOrderState[_order.salt].quantity + _quantity
+        );
         _;
     }
 
@@ -73,7 +83,7 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
     function buy(
         OrderParameter[] memory _orders,
         bytes[] memory _orderSigns,
-        uint256[] memory _quantitys
+        uint64[] memory _quantitys
     ) external onlyCaller whenNotPaused {
         require(
             _orders.length == _orderSigns.length &&
@@ -96,17 +106,16 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
         OrderParameter memory _order,
         bytes memory _orderSign,
         uint256 _tokenId,
-        uint256 _quantity
+        uint64 _quantity
     ) external onlyCaller whenNotPaused {
         require(_verification(_order, _orderSign), "Invalid signature");
         _sell(_order, _tokenId, _quantity);
     }
 
-    function _buy(OrderParameter memory _order, uint256 _quantity)
+    function _buy(OrderParameter memory _order, uint64 _quantity)
         internal
-        checkTime(_order.startTime, _order.endTime)
+        checkOrder(_order, _quantity)
     {
-        require(_quantity > 0, "quantity must be greater than 0");
         if (_order.nftType == NftType.ERC721) {
             _buyErc721(_order);
         } else if (_order.nftType == NftType.ERC1155) {
@@ -145,10 +154,12 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
             _order.identifierOrCriteria
         );
 
+        usedOrderState[_order.salt] = OrderState({ended: true, quantity: 1});
+
         emit Bought(_order.salt, 1);
     }
 
-    function _buyErc1155(OrderParameter memory _order, uint256 _quantity)
+    function _buyErc1155(OrderParameter memory _order, uint64 _quantity)
         internal
     {
         // require(
@@ -159,8 +170,8 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
             IERC1155Upgradeable(_order.nftToken).balanceOf(
                 _order.offerer,
                 _order.identifierOrCriteria
-            ) > quantitys[_order.salt] + _quantity,
-            "Insufficient quantity"
+            ) > _quantity,
+            "Insufficient tokenId"
         );
 
         _handleFee(
@@ -179,7 +190,9 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
             ""
         );
 
-        quantitys[_order.salt] = quantitys[_order.salt] + _quantity;
+        usedOrderState[_order.salt].quantity =
+            usedOrderState[_order.salt].quantity +
+            _quantity;
 
         emit Bought(_order.salt, _quantity);
     }
@@ -187,9 +200,8 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
     function _sell(
         OrderParameter memory _order,
         uint256 _tokenId,
-        uint256 _quantity
-    ) internal checkTime(_order.startTime, _order.endTime) {
-        require(_quantity > 0, "quantity must be greater than 0");
+        uint64 _quantity
+    ) internal checkOrder(_order, _quantity) {
         require(_order.tokenType == TokenType.ERC20, "Only support ERC20");
         if (
             _order.nftType == NftType.ERC721 ||
@@ -221,8 +233,8 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
                 IERC1155Upgradeable(_order.nftToken).balanceOf(
                     msg.sender,
                     _tokenId
-                ) > quantitys[_order.salt] + _quantity,
-                "Insufficient quantity"
+                ) > _quantity,
+                "Insufficient tokenId"
             );
             IERC1155Upgradeable(_order.nftToken).safeTransferFrom(
                 msg.sender,
@@ -231,9 +243,11 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
                 _quantity,
                 ""
             );
-
-            quantitys[_order.salt] = quantitys[_order.salt] + _quantity;
         }
+
+        usedOrderState[_order.salt].quantity =
+            usedOrderState[_order.salt].quantity +
+            _quantity;
 
         _handleFee(
             _order.tokenType,
@@ -256,8 +270,13 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
         (uint256 fee_, uint256 remaining_) = IFeeHandler(feeHandle)
             .getFeeAndRemaining(_nftToken, _amount);
 
-        if (whitelist[msg.sender] || whitelist[_recipient]) {
+        if (whitelist[msg.sender]) {
             _amount = remaining_;
+            fee_ = 0;
+        }
+
+        if (whitelist[_recipient]) {
+            remaining_ = _amount;
             fee_ = 0;
         }
 

@@ -14,7 +14,7 @@ struct OrderParameter {
     NftType nftType;
     address nftToken;
     uint256 identifierOrCriteria;
-    uint256 quantity;
+    uint64 quantity;
     // other info
     address payable recipient;
     uint64 startTime;
