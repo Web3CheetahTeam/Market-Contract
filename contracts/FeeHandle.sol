@@ -124,13 +124,14 @@ contract FeeHandle is Admin, IFeeHandler {
     function collectionTotalFee(address _collection, uint256 _amount)
         public
         view
-        returns (uint256)
+        returns (
+            uint256 platformFee,
+            uint256 projectFee,
+            uint256 ipFee
+        )
     {
-        (uint256 platformFee, uint256 projectFee, uint256 ipFee) = getFeeDetail(
-            _collection,
-            _amount
-        );
-        return platformFee + projectFee + ipFee;
+        (platformFee, projectFee, ipFee) = getFeeDetail(_collection, _amount);
+        return (platformFee, projectFee, ipFee);
     }
 
     function chargeFeeETH(address _collection) external payable {

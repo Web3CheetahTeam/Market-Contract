@@ -30,7 +30,7 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
     // (salt => OrderState)
     mapping(uint256 => OrderState) public usedOrderState;
 
-    event SetRoyaltyContract(address indexed feeHandleContract);
+    event SetFeeHandle(address indexed feeHandleContract);
     event SetWhiteList(address[] users, bool[] list);
     event Canceled(address indexed canceller, uint256 indexed salt);
     event Bought(uint256 indexed salt, uint256 indexed quantity);
@@ -51,7 +51,8 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
         require(block.timestamp <= _order.endTime, "Order ended");
         require(!usedOrderState[_order.salt].ended, "Order used");
         require(
-            _order.quantity >= usedOrderState[_order.salt].quantity + _quantity
+            _order.quantity >= usedOrderState[_order.salt].quantity + _quantity,
+            "Insufficient quantity"
         );
         _;
     }
@@ -64,15 +65,18 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
     function initialize(address _feeHandle) public initializer {
         __Ownable_init();
         __EIP712_init("nft market", "v1.0.0");
-        setRoyaltyContract(_feeHandle);
+        setFeeHandle(_feeHandle);
     }
 
-    function setRoyaltyContract(address _feeHandle) public onlyAdmin {
+    function setFeeHandle(address _feeHandle) public onlyAdmin {
         feeHandle = IFeeHandler(_feeHandle);
-        emit SetRoyaltyContract(_feeHandle);
+        emit SetFeeHandle(_feeHandle);
     }
 
-    function setWhiteList(address[] memory users, bool[] memory list) public {
+    function setWhiteList(address[] memory users, bool[] memory list)
+        public
+        onlyOwner
+    {
         require(users.length == list.length, "Length mismatch");
         for (uint256 i = 0; i < users.length; ) {
             whitelist[users[i]] = list[i];
@@ -140,8 +144,9 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
         //     IERC165Upgradeable(_order.nftToken).supportsInterface(type(IERC721Upgradeable).interfaceId), "Invaild ERC721 contract"
         // );
 
-        _handleFee(
+        _handleAmount(
             _order.tokenType,
+            msg.sender,
             _order.nftToken,
             _order.token,
             _order.amount,
@@ -170,12 +175,13 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
             IERC1155Upgradeable(_order.nftToken).balanceOf(
                 _order.offerer,
                 _order.identifierOrCriteria
-            ) > _quantity,
+            ) >= _quantity,
             "Insufficient tokenId"
         );
 
-        _handleFee(
+        _handleAmount(
             _order.tokenType,
+            msg.sender,
             _order.nftToken,
             _order.token,
             _order.amount * _quantity,
@@ -249,19 +255,21 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
             usedOrderState[_order.salt].quantity +
             _quantity;
 
-        _handleFee(
+        _handleAmount(
             _order.tokenType,
+            _order.offerer,
             _order.nftToken,
             _order.token,
             _order.amount * _quantity,
-            _order.offerer
+            msg.sender
         );
 
         emit Sold(_order.salt, _tokenId, _quantity);
     }
 
-    function _handleFee(
+    function _handleAmount(
         TokenType _tokenType,
+        address _sender,
         address _nftToken,
         address _token,
         uint256 _amount,
@@ -270,7 +278,7 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
         (uint256 fee_, uint256 remaining_) = IFeeHandler(feeHandle)
             .getFeeAndRemaining(_nftToken, _amount);
 
-        if (whitelist[msg.sender]) {
+        if (whitelist[_sender]) {
             _amount = remaining_;
             fee_ = 0;
         }
@@ -283,7 +291,7 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
         if (_tokenType == TokenType.ERC20) {
             require(
                 IERC20Upgradeable(_token).transferFrom(
-                    msg.sender,
+                    _sender,
                     address(this),
                     _amount
                 ),
@@ -308,7 +316,7 @@ contract Market is Admin, Pause, EIP712Upgradeable, OrderParameterBase {
                 IFeeHandler(feeHandle).chargeFeeETH{value: fee_}(_nftToken);
             }
             if (msg.value > _amount) {
-                payable(msg.sender).transfer(msg.value - _amount);
+                payable(_sender).transfer(msg.value - _amount);
             }
         }
     }
