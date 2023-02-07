@@ -1,8 +1,4 @@
 const hre = require('hardhat');
-const { toBN, toWei } = require('web3-utils');
-const Web3 = require('web3');
-const { expect } = require('chai');
-const web3 = new Web3(Web3.givenProvider);
 const { assert } = require('./common');
 const { currentTime, toUnit, fastForward } = require('../utils')();
 const deployer = require('../../utils/deploy');
@@ -16,7 +12,6 @@ describe("Market", async function () {
     /* --------- constructor args --------- */
     // 2 days
     const DAY = 86400;
-    const Ether = toUnit(1);
     const name = "Archloot";
     const symbol = "Archloot";
     const zeroAddress = "0x0000000000000000000000000000000000000000"
@@ -62,12 +57,20 @@ describe("Market", async function () {
             await market.connect(owner).setFees(testNFT2.address, fee2);
         });
 
-        it.only('fixed price by ETH test: ', async () => {
+        it('fixed price by ETH test: ', async () => {
             await market.setCollection(testNFT1.address, true);
+            const fees = [100, 100, 200];
+            await market.setFees(testNFT1.address, fees);
+            await market.setVaults(marketVault.address, projectVault.address, ipVault.address);
+
+            //  Vaults balance
+            let marketVaultBalance = await marketVault.getBalance();
+            let projectVaultBalance = await projectVault.getBalance();
+            let ipVaultBalance = await ipVault.getBalance();
 
             // user3 buy user1's testNFT1
             const tokenID = 1;
-            const price = Ether.toString();
+            let price = hre.ethers.utils.parseEther("1");
             const order = {
                 "offerer": user1.address,
                 "offer": [{ "itemType": 2, "token": testNFT1.address, "identifierOrCriteria": tokenID, "startAmount": 1, "endAmount": 1 }],
@@ -76,8 +79,8 @@ describe("Market", async function () {
                         "itemType": 0,
                         "token": zeroAddress,
                         "identifierOrCriteria": 0,
-                        "startAmount": price,
-                        "endAmount": price,
+                        "startAmount": price.toString(),
+                        "endAmount": price.toString(),
                         "recipient": user1.address
                     }
                 ],
@@ -88,9 +91,17 @@ describe("Market", async function () {
             }
             const sign = await generateSign(user1, order, 0);
             order.signature = sign;
-            await market.connect(user3).fulfillOrder(order, { value: price });
+            await market.connect(user3).fulfillOrder(order, { value: price.toString() });
 
             assert.equal(await testNFT1.ownerOf(tokenID), user3.address);
+
+            // vaults' balance should be increace
+            assert.equal((await marketVault.getBalance()).toString(), marketVaultBalance.add(
+                price.mul(hre.ethers.BigNumber.from([fees[0]])).div(hre.ethers.BigNumber.from(10000))).toString());
+            assert.equal((await projectVault.getBalance()).toString(), projectVaultBalance.add(
+                price.mul(hre.ethers.BigNumber.from([fees[1]])).div(hre.ethers.BigNumber.from(10000))).toString());
+            assert.equal((await ipVault.getBalance()).toString(), ipVaultBalance.add(
+                price.mul(hre.ethers.BigNumber.from([fees[2]])).div(hre.ethers.BigNumber.from(10000))).toString());
         })
 
         async function generateSign(signer, order, counter) {

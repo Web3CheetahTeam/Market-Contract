@@ -421,6 +421,16 @@ contract Market is
         );
     }
 
+    function setVaults(
+        address marketVault_,
+        address projectVault_,
+        address ipVault_
+    ) public onlyOwner {
+        marketVault = marketVault_;
+        projectVault = projectVault_;
+        ipVault = ipVault_;
+    }
+
     function onERC721Received(
         address,
         address,
