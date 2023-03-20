@@ -37,7 +37,7 @@ module.exports = {
       url: process.env.GOERLI_URL || "",
       accounts:
         process.env.PRIVATE_KEY_TEST_Account1 !== undefined ? 
-        [process.env.PRIVATE_KEY_TEST_Account1,process.env.PRIVATE_KEY_TEST_Account2] : [],
+        [process.env.PRIVATE_KEY_TEST_Account1,process.env.PRIVATE_KEY_TEST_Account2,process.env.PRIVATE_KEY_TEST_Account3] : [],
     },
     eth: {
       url: process.env.ETH_MAIN_URL || "",

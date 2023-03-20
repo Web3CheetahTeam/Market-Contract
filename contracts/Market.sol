@@ -66,9 +66,9 @@ contract Market is
 
     error OrderTypeError(ItemType offerType, ItemType considerationType);
 
-    function initialize() public initializer {
+    function initialize(string memory name, string memory version) public initializer {
         __Ownable_init();
-        __EIP712_init("hotluuu.io market", "v1.0.0");
+        __EIP712_init(name, version);
     }
 
     function _verify(
@@ -77,7 +77,7 @@ contract Market is
     ) internal view returns (address) {
         bytes32 digest = _hashTypedDataV4(orderHash);
         address signer = ECDSAUpgradeable.recover(digest, signature);
-        return signer;
+        return (signer);
     }
 
     function fulfillOrder(
@@ -108,11 +108,6 @@ contract Market is
             !_orderStatus.isCancelled && !_orderStatus.isValidated,
             "Status error"
         );
-
-
-        // bytes32 offerHash = _hashOfferItem(order.offer[0]);
-        // bytes32 considerationHash = _hashConsiderationItem(order.consideration[0]);
-        // bytes32 orderHashNotArray = _deriveOrderHash_NotArray(order, counters[order.offerer]);
 
         // verify signature
         require(
@@ -307,7 +302,7 @@ contract Market is
                 IERC20Upgradeable(offerItem.token).transferFrom(
                     order.offerer,
                     msg.sender,
-                    offerItem.startAmount
+                    offerItem.startAmount - _totalFee
                 ),
                 "Transfer erc20 offer error"
             );
@@ -412,6 +407,12 @@ contract Market is
         address collectionAddress,
         CollectionFee calldata fees_
     ) public onlyOwner {
+        require(
+            marketVault != address(0) &&
+                projectVault != address(0) &&
+                ipVault != address(0),
+            "ERROR: vault is empty"
+        );
         fees[collectionAddress] = fees_;
         emit SetCollectionFee(
             collectionAddress,
@@ -419,6 +420,9 @@ contract Market is
             fees_.projectFee,
             fees_.ipFee
         );
+        if (!collections[collectionAddress]) {
+            collections[collectionAddress] = true;
+        }
     }
 
     function setVaults(

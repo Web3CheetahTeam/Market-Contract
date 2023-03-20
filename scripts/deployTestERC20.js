@@ -8,7 +8,7 @@ const hre = require("hardhat");
 const deployer = require('../utils/deploy');
 
 async function main() {
-    const token = await deployer.deployTestERC20("TestToken","TT");
+    const token = await deployer.deployTestERC20("WETH","WETH");
     console.log("token deployed to:", token.address);
 }
 
