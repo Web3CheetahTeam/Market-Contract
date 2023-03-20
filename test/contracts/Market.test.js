@@ -5,23 +5,32 @@ const deployer = require('../../utils/deploy');
 const { MerkleTree } = require('merkletreejs');
 
 describe("Market", async function () {
-    let market, testNFT1, testNFT2, USDT;
+    let market, testNFT1, testNFT1155, USDT;
 
-    let owner, user1, user2, user3, marketVault, projectVault, ipVault;
+    let owner, user1, user2, user3, marketVault, projectVault, ipVault, testSiner;
 
     /* --------- constructor args --------- */
     // 2 days
     const DAY = 86400;
     const name = "Archloot";
     const symbol = "Archloot";
+    const uri = "";
     const zeroAddress = "0x0000000000000000000000000000000000000000"
+
+    const ItemType = {
+        NATIVE: 0,
+        ERC20: 1,
+        ERC721: 2,
+        ERC1155: 3
+    }
 
     beforeEach(async function () {
         [owner, user1, user2, user3, marketVault, projectVault, ipVault] = await hre.ethers.getSigners();
+        testSiner = new hre.ethers.Wallet("a1cc4b4e654bbce4508fecdf5347c91ddc8452380144a18541b8b7c97c110382")
 
         // deploy
         testNFT1 = await deployer.deployTestNFT(name, symbol);
-        testNFT2 = await deployer.deployTestNFT(name, symbol);
+        testNFT1155 = await deployer.deployTestNFT1155(uri);
         USDT = await deployer.deployTestERC20(name, symbol);
         market = await deployer.deployMarket();
     });
@@ -35,45 +44,59 @@ describe("Market", async function () {
             /* 
                 铸造NFT
             */
-            testNFT1.connect(user1).mint(0, 19, user1.address);
-            testNFT2.connect(user1).mint(0, 19, user2.address);
-            testNFT1.connect(user1).setApprovalForAll(market.address, true);
-            testNFT1.connect(user2).setApprovalForAll(market.address, true);
+            await testNFT1.connect(user1).mint(0, 19, user1.address);
+            await testNFT1.connect(user1).setApprovalForAll(market.address, true);
+            await testNFT1.connect(user2).setApprovalForAll(market.address, true);
+
+            await testNFT1155.connect(user1).mint(0, 20, user1.address);
+            await testNFT1155.connect(user1).setApprovalForAll(market.address, true);
 
             /* 
                 铸造USDT
             */
-            USDT.connect(user1).mint(10000, user1.address);
+            await USDT.connect(user1).mint(hre.ethers.utils.parseEther("10000"), user1.address);
+            await USDT.connect(user2).mint(hre.ethers.utils.parseEther("10000"), user2.address);
+            await USDT.connect(user3).mint(hre.ethers.utils.parseEther("10000"), user3.address);
 
             /* 
                 配置交易费
             */
+            await market.setCollection(testNFT1.address, true);
+            await market.setCollection(testNFT1155.address, true);
+            await market.setVaults(marketVault.address, projectVault.address, ipVault.address);
             // 1%,2%,3%
             const fee1 = [100, 200, 300];
             await market.connect(owner).setFees(testNFT1.address, fee1);
 
             // 2%,3%,4%
             const fee2 = [200, 300, 400];
-            await market.connect(owner).setFees(testNFT2.address, fee2);
+            await market.connect(owner).setFees(testNFT1155.address, fee2);
         });
 
         it('fixed price by ETH test: ', async () => {
-            await market.setCollection(testNFT1.address, true);
             const fees = [100, 100, 200];
             await market.setFees(testNFT1.address, fees);
-            await market.setVaults(marketVault.address, projectVault.address, ipVault.address);
 
             //  Vaults balance
             let marketVaultBalance = await marketVault.getBalance();
             let projectVaultBalance = await projectVault.getBalance();
             let ipVaultBalance = await ipVault.getBalance();
+            let user1Balance = await user1.getBalance();
 
             // user3 buy user1's testNFT1
             const tokenID = 1;
             let price = hre.ethers.utils.parseEther("1");
             const order = {
                 "offerer": user1.address,
-                "offer": [{ "itemType": 2, "token": testNFT1.address, "identifierOrCriteria": tokenID, "startAmount": 1, "endAmount": 1 }],
+                "offer": [
+                    {
+                        "itemType": 2,
+                        "token": testNFT1.address,
+                        "identifierOrCriteria": tokenID,
+                        "startAmount": 1,
+                        "endAmount": 1
+                    }
+                ],
                 "consideration": [
                     {
                         "itemType": 0,
@@ -95,16 +118,295 @@ describe("Market", async function () {
 
             assert.equal(await testNFT1.ownerOf(tokenID), user3.address);
 
-            // vaults' balance should be increace
+            // vaults' balance should be increace 
             assert.equal((await marketVault.getBalance()).toString(), marketVaultBalance.add(
                 price.mul(hre.ethers.BigNumber.from([fees[0]])).div(hre.ethers.BigNumber.from(10000))).toString());
             assert.equal((await projectVault.getBalance()).toString(), projectVaultBalance.add(
                 price.mul(hre.ethers.BigNumber.from([fees[1]])).div(hre.ethers.BigNumber.from(10000))).toString());
             assert.equal((await ipVault.getBalance()).toString(), ipVaultBalance.add(
                 price.mul(hre.ethers.BigNumber.from([fees[2]])).div(hre.ethers.BigNumber.from(10000))).toString());
+            // User1's balance
+            assert.equal((await user1.getBalance()).toString(), user1Balance.add(
+                price.mul(hre.ethers.BigNumber.from((10000 - fees[0] - fees[1] - fees[2]))).div(hre.ethers.BigNumber.from(10000))).toString());
         })
 
+        it.only('test on goerli: ', async () => {
+            const tokenID = 2433;
+            let price = hre.ethers.utils.parseEther("1");
+            const order = {
+                "offerer": testSiner.address,
+                "offer": [
+                    {
+                        "itemType": 2,
+                        "token": "0x93b38db5c4652a23770f2979b0be03035b8317e2",
+                        "identifierOrCriteria": tokenID,
+                        "startAmount": 1,
+                        "endAmount": 1
+                    }
+                ],
+                "consideration": [
+                    {
+                        "itemType": 0,
+                        "token": zeroAddress,
+                        "identifierOrCriteria": 0,
+                        "startAmount": price.toString(),
+                        "endAmount": price.toString(),
+                        "recipient": testSiner.address
+                    }
+                ],
+                "startTime": 0,
+                "endTime": 1678264663,
+                "salt": 0,
+                "signature": ''
+            }
+
+            
+
+            // const signt = await generateSignOnGoerli(testSiner, order, 0)
+            const signt = await generateSign(testSiner, order, 0)
+            console.log("test script: ", signt, testSiner.address);
+
+            order.signature = signt;
+            await market.connect(user3).fulfillOrder(order, { value: price.toString() });
+        })
+
+        it('fixed price by USDT test: ', async () => {
+            const fees = [200, 100, 100];
+            await market.setFees(testNFT1.address, fees);
+
+            const user1Balance = await USDT.balanceOf(user1.address);
+            const user3Balance = await USDT.balanceOf(user3.address);
+
+            // user3 buy user1's testNFT1
+            const tokenID = 1;
+            let price = hre.ethers.utils.parseEther("1");
+            const order = {
+                "offerer": user1.address,
+                "offer": [
+                    {
+                        "itemType": ItemType.ERC721,
+                        "token": testNFT1.address,
+                        "identifierOrCriteria": tokenID,
+                        "startAmount": 1,
+                        "endAmount": 1
+                    }
+                ],
+                "consideration": [
+                    {
+                        "itemType": ItemType.ERC20,
+                        "token": USDT.address,
+                        "identifierOrCriteria": 0,
+                        "startAmount": price.toString(),
+                        "endAmount": price.toString(),
+                        "recipient": user1.address
+                    }
+                ],
+                "startTime": 0,
+                "endTime": 100000000000,
+                "salt": 1,
+                "signature": ''
+            }
+            const sign = await generateSign(user1, order, 0);
+            order.signature = sign;
+
+            // user3 approve
+            await USDT.connect(user3).approve(market.address, hre.ethers.constants.MaxUint256);
+
+            await market.connect(user3).fulfillOrder(order, { value: 0 });
+
+            assert.equal(await testNFT1.ownerOf(tokenID), user3.address);
+
+            // vaults' balance should be increace 
+            assert.equal((await USDT.balanceOf(marketVault.address)).toString(),
+                price.mul(hre.ethers.BigNumber.from([fees[0]])).div(hre.ethers.BigNumber.from(10000)).toString());
+            assert.equal((await USDT.balanceOf(projectVault.address)).toString(),
+                price.mul(hre.ethers.BigNumber.from([fees[1]])).div(hre.ethers.BigNumber.from(10000)).toString());
+            assert.equal((await USDT.balanceOf(ipVault.address)).toString(),
+                price.mul(hre.ethers.BigNumber.from([fees[2]])).div(hre.ethers.BigNumber.from(10000)).toString());
+            // Users' balance
+            assert.equal((await USDT.balanceOf(user1.address)).toString(), user1Balance.add(
+                price.mul(hre.ethers.BigNumber.from((10000 - fees[0] - fees[1] - fees[2]))).div(hre.ethers.BigNumber.from(10000))
+            ).toString());
+            assert.equal((await USDT.balanceOf(user3.address)).toString(), user3Balance.sub(price).toString());
+        })
+
+        it('accept offer by USDT test: ', async () => {
+            const fees = [200, 100, 100];
+            await market.setFees(testNFT1.address, fees);
+
+            const user1Balance = await USDT.balanceOf(user1.address);
+            const user3Balance = await USDT.balanceOf(user3.address);
+
+            // user1 accept user3's offer
+            const tokenID = 1;
+            let offerPrice = hre.ethers.utils.parseEther("1");
+            const order = {
+                "offerer": user3.address,
+                "offer": [{
+                    "itemType": ItemType.ERC20,
+                    "token": USDT.address,
+                    "identifierOrCriteria": 0,
+                    "startAmount": offerPrice.toString(),
+                    "endAmount": offerPrice.toString(),
+                }],
+                "consideration": [
+                    {
+                        "itemType": ItemType.ERC721,
+                        "token": testNFT1.address,
+                        "identifierOrCriteria": tokenID,
+                        "startAmount": 1,
+                        "endAmount": 1,
+                        "recipient": user3.address
+                    }
+                ],
+                "startTime": 0,
+                "endTime": 100000000000,
+                "salt": 1,
+                "signature": ''
+            }
+            const sign = await generateSign(user3, order, 0);
+            order.signature = sign;
+
+            // user3 approve
+            await USDT.connect(user3).approve(market.address, hre.ethers.constants.MaxUint256);
+
+            await market.connect(user1).fulfillOrder(order, { value: 0 });
+
+            assert.equal(await testNFT1.ownerOf(tokenID), user3.address);
+
+            // vaults' balance should be increace 
+            assert.equal((await USDT.balanceOf(marketVault.address)).toString(),
+                offerPrice.mul(hre.ethers.BigNumber.from([fees[0]])).div(hre.ethers.BigNumber.from(10000)).toString());
+            assert.equal((await USDT.balanceOf(projectVault.address)).toString(),
+                offerPrice.mul(hre.ethers.BigNumber.from([fees[1]])).div(hre.ethers.BigNumber.from(10000)).toString());
+            assert.equal((await USDT.balanceOf(ipVault.address)).toString(),
+                offerPrice.mul(hre.ethers.BigNumber.from([fees[2]])).div(hre.ethers.BigNumber.from(10000)).toString());
+            // Users' balance
+            assert.equal((await USDT.balanceOf(user1.address)).toString(), user1Balance.add(
+                offerPrice.mul(hre.ethers.BigNumber.from((10000 - fees[0] - fees[1] - fees[2]))).div(hre.ethers.BigNumber.from(10000))
+            ).toString());
+            assert.equal((await USDT.balanceOf(user3.address)).toString(), user3Balance.sub(offerPrice).toString());
+        })
+
+        it('trade for ERC1155 test: ', async () => {
+            const fees = [100, 100, 200];
+            await market.setFees(testNFT1155.address, fees);
+
+            //  Vaults balance
+            let marketVaultBalance = await marketVault.getBalance();
+            let projectVaultBalance = await projectVault.getBalance();
+            let ipVaultBalance = await ipVault.getBalance();
+            let user1Balance = await user1.getBalance();
+
+            // user3 buy user1's testNFT1155
+            const tokenID = 0;
+            let price = hre.ethers.utils.parseEther("1");
+            const amount = 5;
+            const order = {
+                "offerer": user1.address,
+                "offer": [
+                    {
+                        "itemType": ItemType.ERC1155,
+                        "token": testNFT1155.address,
+                        "identifierOrCriteria": tokenID,
+                        "startAmount": amount,
+                        "endAmount": amount
+                    }
+                ],
+                "consideration": [
+                    {
+                        "itemType": ItemType.NATIVE,
+                        "token": zeroAddress,
+                        "identifierOrCriteria": 0,
+                        "startAmount": price.toString(),
+                        "endAmount": price.toString(),
+                        "recipient": user1.address
+                    }
+                ],
+                "startTime": 0,
+                "endTime": 100000000000,
+                "salt": 1,
+                "signature": ''
+            }
+            const sign = await generateSign(user1, order, 0);
+            order.signature = sign;
+            await market.connect(user3).fulfillOrder(order, { value: price.toString() });
+
+            assert.equal(await testNFT1155.balanceOf(user3.address, tokenID), amount);
+            assert.equal(await testNFT1155.balanceOf(user1.address, tokenID), amount * 3);
+
+            // vaults' balance should be increace 
+            assert.equal((await marketVault.getBalance()).toString(), marketVaultBalance.add(
+                price.mul(hre.ethers.BigNumber.from([fees[0]])).div(hre.ethers.BigNumber.from(10000))).toString());
+            assert.equal((await projectVault.getBalance()).toString(), projectVaultBalance.add(
+                price.mul(hre.ethers.BigNumber.from([fees[1]])).div(hre.ethers.BigNumber.from(10000))).toString());
+            assert.equal((await ipVault.getBalance()).toString(), ipVaultBalance.add(
+                price.mul(hre.ethers.BigNumber.from([fees[2]])).div(hre.ethers.BigNumber.from(10000))).toString());
+            // User1's balance
+            assert.equal((await user1.getBalance()).toString(), user1Balance.add(
+                price.mul(hre.ethers.BigNumber.from((10000 - fees[0] - fees[1] - fees[2]))).div(hre.ethers.BigNumber.from(10000))).toString());
+        })
+
+        async function generateSignOnGoerli(signer, order, counter) {
+            const domain = {
+                name: 'hotluuu.io market',
+                version: 'v1.0.0',
+                chainId: 5,
+                verifyingContract: "0x84850745011c05116dc7d7d8b5d588ad6575152c"
+            }
+            const types = {
+                OfferItem: [
+                    { name: 'itemType', type: 'uint8' },
+                    { name: 'token', type: 'address' },
+                    { name: 'identifierOrCriteria', type: 'uint256' },
+                    { name: 'startAmount', type: 'uint256' },
+                    { name: 'endAmount', type: 'uint256' }
+                ],
+                ConsiderationItem: [
+                    { name: 'itemType', type: 'uint8' },
+                    { name: 'token', type: 'address' },
+                    { name: 'identifierOrCriteria', type: 'uint256' },
+                    { name: 'startAmount', type: 'uint256' },
+                    { name: 'endAmount', type: 'uint256' },
+                    { name: 'recipient', type: 'address' }
+                ],
+                OrderComponents: [
+                    { name: 'offerer', type: 'address' },
+                    { name: 'offer', type: 'OfferItem[]' },
+                    { name: 'consideration', type: 'ConsiderationItem[]' },
+                    { name: 'startTime', type: 'uint256' },
+                    { name: 'endTime', type: 'uint256' },
+                    { name: 'salt', type: 'uint256' },
+                    { name: 'counter', type: 'uint256' }
+                ]
+            };
+            const value = {
+                offerer: order.offerer,
+                offer: [{
+                    itemType: order.offer[0].itemType,
+                    token: order.offer[0].token,
+                    identifierOrCriteria: order.offer[0].identifierOrCriteria,
+                    startAmount: order.offer[0].startAmount,
+                    endAmount: order.offer[0].endAmount
+                }],
+                consideration: [{
+                    itemType: order.consideration[0].itemType,
+                    token: order.consideration[0].token,
+                    identifierOrCriteria: order.consideration[0].identifierOrCriteria,
+                    startAmount: order.consideration[0].startAmount,
+                    endAmount: order.consideration[0].endAmount,
+                    recipient: order.consideration[0].recipient
+                }],
+                startTime: order.startTime,
+                endTime: order.endTime,
+                salt: order.salt,
+                counter: counter
+            }
+
+            return await signer._signTypedData(domain, types, value);
+        }
         async function generateSign(signer, order, counter) {
+            // console.log(hre.network.config.chainId);
             const domain = {
                 name: 'hotluuu.io market',
                 version: 'v1.0.0',

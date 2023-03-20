@@ -26,3 +26,6 @@ artifacts
 
 package-lock.json
 contracts/Tem.sol
+contracts/Starknet
+scripts/deployCairo.js
+scripts/deployExercise4.js

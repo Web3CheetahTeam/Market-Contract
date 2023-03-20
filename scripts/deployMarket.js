@@ -8,7 +8,9 @@ const hre = require("hardhat");
 const deployer = require('../utils/deploy');
 
 async function main() {
-    const market = await deployer.deployMarket();
+    const name = "hotluuu.io market";
+    const version = "v1.0.0";
+    const market = await deployer.deployMarket(name, version);
     console.log("market deployed to:", market.address);
 }
 
