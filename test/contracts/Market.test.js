@@ -130,46 +130,6 @@ describe("Market", async function () {
                 price.mul(hre.ethers.BigNumber.from((10000 - fees[0] - fees[1] - fees[2]))).div(hre.ethers.BigNumber.from(10000))).toString());
         })
 
-        it.only('test on goerli: ', async () => {
-            const tokenID = 2433;
-            let price = hre.ethers.utils.parseEther("1");
-            const order = {
-                "offerer": testSiner.address,
-                "offer": [
-                    {
-                        "itemType": 2,
-                        "token": "0x93b38db5c4652a23770f2979b0be03035b8317e2",
-                        "identifierOrCriteria": tokenID,
-                        "startAmount": 1,
-                        "endAmount": 1
-                    }
-                ],
-                "consideration": [
-                    {
-                        "itemType": 0,
-                        "token": zeroAddress,
-                        "identifierOrCriteria": 0,
-                        "startAmount": price.toString(),
-                        "endAmount": price.toString(),
-                        "recipient": testSiner.address
-                    }
-                ],
-                "startTime": 0,
-                "endTime": 1678264663,
-                "salt": 0,
-                "signature": ''
-            }
-
-            
-
-            // const signt = await generateSignOnGoerli(testSiner, order, 0)
-            const signt = await generateSign(testSiner, order, 0)
-            console.log("test script: ", signt, testSiner.address);
-
-            order.signature = signt;
-            await market.connect(user3).fulfillOrder(order, { value: price.toString() });
-        })
-
         it('fixed price by USDT test: ', async () => {
             const fees = [200, 100, 100];
             await market.setFees(testNFT1.address, fees);
@@ -347,64 +307,6 @@ describe("Market", async function () {
                 price.mul(hre.ethers.BigNumber.from((10000 - fees[0] - fees[1] - fees[2]))).div(hre.ethers.BigNumber.from(10000))).toString());
         })
 
-        async function generateSignOnGoerli(signer, order, counter) {
-            const domain = {
-                name: 'hotluuu.io market',
-                version: 'v1.0.0',
-                chainId: 5,
-                verifyingContract: "0x84850745011c05116dc7d7d8b5d588ad6575152c"
-            }
-            const types = {
-                OfferItem: [
-                    { name: 'itemType', type: 'uint8' },
-                    { name: 'token', type: 'address' },
-                    { name: 'identifierOrCriteria', type: 'uint256' },
-                    { name: 'startAmount', type: 'uint256' },
-                    { name: 'endAmount', type: 'uint256' }
-                ],
-                ConsiderationItem: [
-                    { name: 'itemType', type: 'uint8' },
-                    { name: 'token', type: 'address' },
-                    { name: 'identifierOrCriteria', type: 'uint256' },
-                    { name: 'startAmount', type: 'uint256' },
-                    { name: 'endAmount', type: 'uint256' },
-                    { name: 'recipient', type: 'address' }
-                ],
-                OrderComponents: [
-                    { name: 'offerer', type: 'address' },
-                    { name: 'offer', type: 'OfferItem[]' },
-                    { name: 'consideration', type: 'ConsiderationItem[]' },
-                    { name: 'startTime', type: 'uint256' },
-                    { name: 'endTime', type: 'uint256' },
-                    { name: 'salt', type: 'uint256' },
-                    { name: 'counter', type: 'uint256' }
-                ]
-            };
-            const value = {
-                offerer: order.offerer,
-                offer: [{
-                    itemType: order.offer[0].itemType,
-                    token: order.offer[0].token,
-                    identifierOrCriteria: order.offer[0].identifierOrCriteria,
-                    startAmount: order.offer[0].startAmount,
-                    endAmount: order.offer[0].endAmount
-                }],
-                consideration: [{
-                    itemType: order.consideration[0].itemType,
-                    token: order.consideration[0].token,
-                    identifierOrCriteria: order.consideration[0].identifierOrCriteria,
-                    startAmount: order.consideration[0].startAmount,
-                    endAmount: order.consideration[0].endAmount,
-                    recipient: order.consideration[0].recipient
-                }],
-                startTime: order.startTime,
-                endTime: order.endTime,
-                salt: order.salt,
-                counter: counter
-            }
-
-            return await signer._signTypedData(domain, types, value);
-        }
         async function generateSign(signer, order, counter) {
             // console.log(hre.network.config.chainId);
             const domain = {

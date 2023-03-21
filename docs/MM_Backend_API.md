@@ -41,7 +41,7 @@ _Will add MUTUAL TLS authentication after API confirmed, will give a code exampl
 ```json lines
 {
   "jsonrpc":"2.0",
-  "result":2176.4897747279997, // unit: ETH,USDT,WTH...
+  "result":2176.4897747279997, // unit: ETH,USDT,WETH...
   "id":1
 }
 ```
