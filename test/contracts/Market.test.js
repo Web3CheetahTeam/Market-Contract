@@ -7,7 +7,7 @@ const { MerkleTree } = require('merkletreejs');
 describe("Market", async function () {
     let market, testNFT1, testNFT1155, USDT;
 
-    let owner, user1, user2, user3, marketVault, projectVault, ipVault, testSiner;
+    let owner, user1, user2, user3, marketVault, projectVault, ipVault;
 
     /* --------- constructor args --------- */
     // 2 days
@@ -26,7 +26,6 @@ describe("Market", async function () {
 
     beforeEach(async function () {
         [owner, user1, user2, user3, marketVault, projectVault, ipVault] = await hre.ethers.getSigners();
-        testSiner = new hre.ethers.Wallet("a1cc4b4e654bbce4508fecdf5347c91ddc8452380144a18541b8b7c97c110382")
 
         // deploy
         testNFT1 = await deployer.deployTestNFT(name, symbol);
