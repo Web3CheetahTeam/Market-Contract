@@ -65,8 +65,12 @@ contract Market is
     event CounterIncremented(uint256 indexed counter, address indexed user);
 
     error OrderTypeError(ItemType offerType, ItemType considerationType);
+    error InvalidCanceller();
 
-    function initialize(string memory name, string memory version) public initializer {
+    function initialize(
+        string memory name,
+        string memory version
+    ) public initializer {
         __Ownable_init();
         __EIP712_init(name, version);
     }
@@ -205,6 +209,16 @@ contract Market is
                     collections[consideration.token],
                     "ERROR: This collection has no permission"
                 );
+                // or
+                // if (
+                //     consideration.itemType == ItemType.NATIVE ||
+                //     consideration.itemType == ItemType.ERC20
+                // ) {
+                //     revert OrderTypeError(
+                //         offerItem.itemType,
+                //         consideration.itemType
+                //     );
+                // }
                 _marketFee =
                     (offerItem.startAmount *
                         fees[consideration.token].marketFee) /
@@ -344,7 +358,7 @@ contract Market is
 
             // Ensure caller is either offerer or zone of the order.
             if (msg.sender != offerer) {
-                // error revert InvalidCanceller();
+                revert InvalidCanceller();
             }
 
             // Derive order hash using the order parameters and the counter.
@@ -412,6 +426,10 @@ contract Market is
                 projectVault != address(0) &&
                 ipVault != address(0),
             "ERROR: vault is empty"
+        );
+        require(
+            fees_.marketFee + fees_.projectFee + fees_.ipFee < 10000,
+            "exceed max fee"
         );
         fees[collectionAddress] = fees_;
         emit SetCollectionFee(
