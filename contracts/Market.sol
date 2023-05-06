@@ -150,8 +150,6 @@ contract Market is
                         "ERROR: This collection has no permission"
                     );
                 }
-                from = order.offerer;
-                to = msg.sender;
 
                 _marketFee =
                     (consideration.startAmount *
@@ -232,9 +230,6 @@ contract Market is
                     10000;
                 _totalFee = _marketFee + _projectFee + _ipFee;
 
-                from = msg.sender;
-                to = order.offerer;
-
                 if (offerItem.itemType == ItemType.NATIVE) {
                     // ETH can't approve
                     revert OrderTypeError(
@@ -298,6 +293,8 @@ contract Market is
                 consideration.recipient,
                 consideration.identifierOrCriteria
             );
+            from = msg.sender;
+            to = consideration.recipient;
         } else if (consideration.itemType == ItemType.ERC1155) {
             IERC1155Upgradeable(consideration.token).safeTransferFrom(
                 msg.sender,
@@ -306,6 +303,8 @@ contract Market is
                 consideration.startAmount,
                 "0x0"
             );
+            from = msg.sender;
+            to = consideration.recipient;
         }
 
         /* 
@@ -326,6 +325,8 @@ contract Market is
                 msg.sender,
                 offerItem.identifierOrCriteria
             );
+            from = order.offerer;
+            to = msg.sender;
         } else if (offerItem.itemType == ItemType.ERC1155) {
             IERC1155Upgradeable(offerItem.token).safeTransferFrom(
                 order.offerer,
@@ -334,6 +335,8 @@ contract Market is
                 offerItem.startAmount,
                 "0x0"
             );
+            from = order.offerer;
+            to = msg.sender;
         }
 
         /* 
