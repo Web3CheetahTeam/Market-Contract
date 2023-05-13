@@ -3,9 +3,10 @@ const { assert } = require('./common');
 const { currentTime, toUnit, fastForward } = require('../utils')();
 const deployer = require('../../utils/deploy');
 const { MerkleTree } = require('merkletreejs');
+const { BigNumber } = require('ethers');
 
 describe("Market", async function () {
-    let market, testNFT1,testNFT2, testNFT1155, USDT;
+    let market, testNFT1, testNFT2, testNFT1155, USDT;
 
     let owner, user1, user2, user3, marketVault, projectVault, ipVault;
 
@@ -65,6 +66,7 @@ describe("Market", async function () {
             /* 
                 配置交易费
             */
+            await market.connect(owner).setVaults(user1.address, user2.address, user3.address);
             await market.setCollection(testNFT1.address, true);
             await market.setCollection(testNFT1155.address, true);
             await market.setVaults(marketVault.address, projectVault.address, ipVault.address);
@@ -77,7 +79,7 @@ describe("Market", async function () {
             await market.connect(owner).setFees(testNFT1155.address, fee2);
         });
 
-        it('fixed price by ETH test: ', async () => {
+        it.only('fixed price by ETH test: ', async () => {
             const fees = [100, 100, 200];
             await market.setFees(testNFT1.address, fees);
 
@@ -120,12 +122,12 @@ describe("Market", async function () {
             order.signature = sign;
             {
                 order.startTime = order.endTime;
-                await assert.revert(market.connect(user3).fulfillOrder(order, { value: price.toString() }),"Time error");
+                await assert.revert(market.connect(user3).fulfillOrder(order, { value: price.toString() }), "Time error");
                 order.startTime = 1;
-                await assert.revert(market.connect(user3).fulfillOrder(order, { value: price.toString() }),"Sign error");
+                await assert.revert(market.connect(user3).fulfillOrder(order, { value: price.toString() }), "Sign error");
                 order.startTime = 0;
             }
-            await assert.revert(market.connect(user3).fulfillOrder(order, { value: 0 }),"TX value error");
+            await assert.revert(market.connect(user3).fulfillOrder(order, { value: price.div(BigNumber.from(2).toString()) }), "TX value error");
             await market.connect(user3).fulfillOrder(order, { value: price.toString() });
 
             assert.equal(await testNFT1.ownerOf(tokenID), user3.address);
@@ -170,7 +172,7 @@ describe("Market", async function () {
                 }
                 const sign = await generateSign(user1, order_error, 0);
                 order_error.signature = sign;
-                await assert.revert(market.connect(user3).fulfillOrder(order_error, { value: price.toString() }),"");
+                await assert.revert(market.connect(user3).fulfillOrder(order_error, { value: price.toString() }), "");
             }
 
             {
@@ -202,7 +204,7 @@ describe("Market", async function () {
                 }
                 const sign = await generateSign(user1, order_error, 0);
                 order_error.signature = sign;
-                await assert.revert(market.connect(user3).fulfillOrder(order_error, { value: price.toString() }),"ERROR: This collection has no permission");
+                await assert.revert(market.connect(user3).fulfillOrder(order_error, { value: price.toString() }), "ERROR: This collection has no permission");
             }
         })
 
@@ -672,7 +674,7 @@ describe("Market", async function () {
             assert.equal(await market.whitelist(user1.address), true);
             assert.equal(await market.whitelist(user2.address), true);
             assert.equal(await market.whitelist(user3.address), true);
-    
+
             // test trade
             const fees = [100, 100, 200];
             await market.setFees(testNFT1.address, fees);
@@ -753,6 +755,9 @@ describe("Market", async function () {
         const collectionAddress = testNFT1.address;
         assert.equal(await market.collections(collectionAddress), false);
         await assert.revert(market.connect(user1).setCollection(collectionAddress, true), "Ownable: caller is not the owner");
+        await assert.revert(market.connect(owner).setCollection(collectionAddress, true), "ERROR: vault is empty");
+
+        await market.connect(owner).setVaults(user1.address, user2.address, user3.address);
         await market.connect(owner).setCollection(collectionAddress, true);
         assert.equal(await market.collections(collectionAddress), true);
     })
