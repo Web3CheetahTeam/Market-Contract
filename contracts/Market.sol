@@ -54,6 +54,7 @@ contract Market is
     );
     event SetWhiteList(address[] users, bool[] permissions);
     event SetCollection(address collection, bool permission);
+    event SetVaults(address marketVault, address projectVault, address ipVault);
     event SetCollectionFee(
         address collection,
         uint64 marketFee,
@@ -386,12 +387,6 @@ contract Market is
         }
     }
 
-    // 增加计数器，取消所有的订单
-    // function incrementCounter() external {
-    //     counters[msg.sender]++;
-    //     emit CounterIncremented(counters[msg.sender], msg.sender);
-    // }
-
     function setCollection(
         address collection,
         bool permission
@@ -450,5 +445,6 @@ contract Market is
         marketVault = marketVault_;
         projectVault = projectVault_;
         ipVault = ipVault_;
+        emit SetVaults(marketVault_, projectVault_, ipVault_);
     }
 }

@@ -8,7 +8,7 @@ const hre = require("hardhat");
 const deployer = require('../utils/deploy');
 
 async function main() {
-    const addr = "0x4070a3118676D1Ca1682C84abce8cCF0a56801E8";
+    const addr = "0xBce5270d62C4a80DA514f87fBae63670268cb952";
     const Market = await hre.ethers.getContractFactory("Market");
     const market = await upgrades.upgradeProxy(addr, Market);
     console.log("market upgrade success:", market.address);
