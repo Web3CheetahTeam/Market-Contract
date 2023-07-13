@@ -2,7 +2,7 @@
 
 
 PRODUCTION
-https://mm.hotluuu.io
+https://mm.hotluuu.io  
 https://mm.hotluuu-idol.io
 
 **URL**            https://test-mm.hotluuu.io:28081
