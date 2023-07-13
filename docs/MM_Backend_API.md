@@ -1,5 +1,10 @@
 # MM Backend API
 
+
+PRODUCTION
+https://mm.hotluuu.io
+https://mm.hotluuu-idol.io
+
 **URL**            https://test-mm.hotluuu.io:28081
 **HEADER**    _Content-Type:application/json_  
 _Will add MUTUAL TLS authentication after API confirmed, will give a code example later_
