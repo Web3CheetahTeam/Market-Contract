@@ -2,8 +2,8 @@
 
 
 PRODUCTION ENVIRONMENT  
-[https://backend.hotluuu.io/mm](https://backend.hotluuu.io/mm/test)  
-[https://backend.hotluuu-idol.io/mm](https://backend.hotluuu-idol.io/mm/test) 
+[https://mm.hotluuu.io](https://mm.hotluuu.io/test)  
+[https://mm.hotluuu-idol.io](https://mm.hotluuu-idol.io/test) 
 
 **URL**            https://test-mm.hotluuu.io:28081
 **HEADER**    _Content-Type:application/json_  
