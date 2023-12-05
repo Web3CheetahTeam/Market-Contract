@@ -35,7 +35,7 @@ describe("Market", async function () {
         testNFT1 = await deployer.deployTestNFT(name, symbol);
         testNFT2 = await deployer.deployTestNFT(name, symbol);
         testNFT1155 = await deployer.deployTestNFT1155(uri);
-        USDT = await deployer.deployTestERC20(name, symbol);
+        USDT = await deployer.deployTestERC20_(name, symbol);
         market = await deployer.deployMarket(marketName, marketVersion);
     });
 
@@ -79,7 +79,7 @@ describe("Market", async function () {
             await market.connect(owner).setFees(testNFT1155.address, fee2);
         });
 
-        it.only('fixed price by ETH test: ', async () => {
+        it('fixed price by ETH test: ', async () => {
             const fees = [100, 100, 200];
             await market.setFees(testNFT1.address, fees);
 

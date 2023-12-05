@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/IERC1155Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "contracts/lib/Struct.sol";
 import "contracts/lib/Enum.sol";
 
@@ -16,6 +17,8 @@ contract Market is
     OrderParameterBase,
     ReentrancyGuardUpgradeable
 {
+    using SafeERC20Upgradeable for IERC20Upgradeable;
+
     struct OrderStatus {
         bool isValidated;
         bool isCancelled;
@@ -52,9 +55,9 @@ contract Market is
         address from,
         address to
     );
+    event SetVaults(address marketVault, address projectVault, address ipVault);
     event SetWhiteList(address[] users, bool[] permissions);
     event SetCollection(address collection, bool permission);
-    event SetVaults(address marketVault, address projectVault, address ipVault);
     event SetCollectionFee(
         address collection,
         uint64 marketFee,
@@ -149,29 +152,21 @@ contract Market is
                     payable(projectVault).transfer(_projectFee);
                     payable(ipVault).transfer(_ipFee);
                 } else {
-                    require(
-                        IERC20Upgradeable(consideration.token).transferFrom(
-                            msg.sender,
-                            marketVault,
-                            _marketFee
-                        ),
-                        "ERC20 market fee error"
+                    IERC20Upgradeable(consideration.token).safeTransferFrom(
+                        msg.sender,
+                        marketVault,
+                        _marketFee
                     );
-                    require(
-                        IERC20Upgradeable(consideration.token).transferFrom(
-                            msg.sender,
-                            projectVault,
-                            _projectFee
-                        ),
-                        "ERC20 project fee error"
+
+                    IERC20Upgradeable(consideration.token).safeTransferFrom(
+                        msg.sender,
+                        projectVault,
+                        _projectFee
                     );
-                    require(
-                        IERC20Upgradeable(consideration.token).transferFrom(
-                            msg.sender,
-                            ipVault,
-                            _ipFee
-                        ),
-                        "ERC20 ip fee error"
+                    IERC20Upgradeable(consideration.token).safeTransferFrom(
+                        msg.sender,
+                        ipVault,
+                        _ipFee
                     );
                 }
             } else if (
@@ -191,29 +186,20 @@ contract Market is
                     10000;
                 _totalFee = _marketFee + _projectFee + _ipFee;
 
-                require(
-                    IERC20Upgradeable(offerItem.token).transferFrom(
-                        order.offerer,
-                        marketVault,
-                        _marketFee
-                    ),
-                    "ERC20 market fee error"
+                IERC20Upgradeable(offerItem.token).safeTransferFrom(
+                    order.offerer,
+                    marketVault,
+                    _marketFee
                 );
-                require(
-                    IERC20Upgradeable(offerItem.token).transferFrom(
-                        order.offerer,
-                        projectVault,
-                        _projectFee
-                    ),
-                    "ERC20 project fee error"
+                IERC20Upgradeable(offerItem.token).safeTransferFrom(
+                    order.offerer,
+                    projectVault,
+                    _projectFee
                 );
-                require(
-                    IERC20Upgradeable(offerItem.token).transferFrom(
-                        order.offerer,
-                        ipVault,
-                        _ipFee
-                    ),
-                    "ERC20 ip fee error"
+                IERC20Upgradeable(offerItem.token).safeTransferFrom(
+                    order.offerer,
+                    ipVault,
+                    _ipFee
                 );
             }
         }
@@ -243,13 +229,10 @@ contract Market is
                     consideration.startAmount - _totalFee
                 );
             } else if (consideration.itemType == ItemType.ERC20) {
-                require(
-                    IERC20Upgradeable(consideration.token).transferFrom(
-                        msg.sender,
-                        consideration.recipient,
-                        consideration.startAmount - _totalFee
-                    ),
-                    "Transfer erc20 consideration error"
+                IERC20Upgradeable(consideration.token).safeTransferFrom(
+                    msg.sender,
+                    consideration.recipient,
+                    consideration.startAmount - _totalFee
                 );
             }
         } else if (
@@ -298,13 +281,10 @@ contract Market is
                     consideration.itemType
                 );
             }
-            require(
-                IERC20Upgradeable(offerItem.token).transferFrom(
-                    order.offerer,
-                    msg.sender,
-                    offerItem.startAmount - _totalFee
-                ),
-                "Transfer erc20 offer error"
+            IERC20Upgradeable(offerItem.token).safeTransferFrom(
+                order.offerer,
+                msg.sender,
+                offerItem.startAmount - _totalFee
             );
         } else if (
             offerItem.itemType == ItemType.ERC721 ||

@@ -41,6 +41,7 @@ module.exports = {
     },
     eth: {
       url: process.env.ETH_MAIN_URL || "",
+      // gasPrice: 27000000000,
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },

@@ -3,12 +3,6 @@ pragma solidity ^0.8.9;
 
 import "contracts/lib/Enum.sol";
 
-/* 
-产生的改变：
-- 一个订单中，包含多个 OfferItem 和多个 ConsiderationItem
-- 将quantity字段分成了两个字段：startAmount 和 endAmount
-- 添加了counter字段，用来实现功能：批量取消所有挂单
- */
 struct OfferItem {
     ItemType itemType;
     address token;
@@ -112,7 +106,6 @@ contract OrderParameterBase {
 
     
 
-    /// @notice 计算订单唯一标识，包含counter
     function _deriveOrderHash(
         OrderParameters memory orderParameters,
         uint256 counter
@@ -215,28 +208,6 @@ contract OrderParameterBase {
                 )
             );
     }
-
-
-
-    /* 
-        Test for EIP712
-     */
-    // struct Person {
-    //     string name;
-    //     address wallet;
-    // }
-
-    // struct Mail {
-    //     Person from;
-    //     Person to;
-    //     string contents;
-    // }
-    // bytes32 constant PERSON_TYPEHASH = keccak256(
-    //     "Person(string name,address wallet)"
-    // );
-    // bytes32 constant MAIL_TYPEHASH = keccak256(
-    //     "Mail(Person from,Person to,string contents)Person(string name,address wallet)"
-    // );
 }
 
 
