@@ -21,6 +21,13 @@ exports.deployTestERC20 = async function (name, symbol) {
     return testERC20;
 }
 
+exports.deployTestERC20_ = async function (name, symbol) {
+    const TestERC20 = await hre.ethers.getContractFactory("TestERC20_");
+    const testERC20 = await TestERC20.deploy(name, symbol);
+    await testERC20.deployed();
+    return testERC20;
+}
+
 exports.deployMarket = async function (name, version) {
     const Market = await hre.ethers.getContractFactory("Market");
     const market = await hre.upgrades.deployProxy(

@@ -1,6 +1,5 @@
 node_modules
 .env
-.openzeppelin
 coverage
 coverage.json
 typechain
@@ -29,3 +28,5 @@ contracts/Tem.sol
 contracts/Starknet
 scripts/deployCairo.js
 scripts/deployExercise4.js
+
+docs/初审修改反馈.md

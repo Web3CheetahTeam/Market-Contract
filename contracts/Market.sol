@@ -7,10 +7,9 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/IERC1155Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "contracts/lib/Struct.sol";
 import "contracts/lib/Enum.sol";
-
-// import "hardhat/console.sol";
 
 contract Market is
     OwnableUpgradeable,
@@ -18,6 +17,8 @@ contract Market is
     OrderParameterBase,
     ReentrancyGuardUpgradeable
 {
+    using SafeERC20Upgradeable for IERC20Upgradeable;
+
     struct OrderStatus {
         bool isValidated;
         bool isCancelled;
@@ -54,6 +55,7 @@ contract Market is
         address from,
         address to
     );
+    event SetVaults(address marketVault, address projectVault, address ipVault);
     event SetWhiteList(address[] users, bool[] permissions);
     event SetCollection(address collection, bool permission);
     event SetCollectionFee(
@@ -86,21 +88,12 @@ contract Market is
 
     function fulfillOrder(
         OrderParameters calldata order
-    ) external payable nonReentrant returns (bool fulfilled) {
+    ) external payable nonReentrant {
         address from;
         address to;
         // calculate order hash
         bytes32 orderHash = _deriveOrderHash(order, counters[order.offerer]);
 
-        /* 
-        Validate
-            - 确保当前时间在订单有效时间内
-            - 是否已经被取消
-            - 是否已经被购买
-            - 验证签名&参数
-            - 验证 tx.value
-            - 重放攻击
-         */
         require(
             block.timestamp >= order.startTime &&
                 block.timestamp <= order.endTime,
@@ -119,38 +112,28 @@ contract Market is
             "Sign error"
         );
 
-        /* 
-            - 转移 Fee
-         */
-        // fee
+        require(
+            order.consideration.length == 1 && order.offer.length == 1,
+            "Param length error"
+        );
+
+        // transfer fee
         uint256 _marketFee;
         uint256 _projectFee;
         uint256 _ipFee;
         uint256 _totalFee;
         ConsiderationItem memory consideration = order.consideration[0];
         OfferItem memory offerItem = order.offer[0];
+        if (offerItem.itemType == ItemType.NATIVE) {
+            // ETH can't approve, offer's type cann't be NATIVE
+            revert OrderTypeError(offerItem.itemType, consideration.itemType);
+        }
         if (!whitelist[msg.sender]) {
             // consideration
             if (
                 consideration.itemType == ItemType.NATIVE ||
                 consideration.itemType == ItemType.ERC20
             ) {
-                // offer必须是NFT
-                if (
-                    offerItem.itemType == ItemType.NATIVE ||
-                    offerItem.itemType == ItemType.ERC20
-                ) {
-                    revert OrderTypeError(
-                        offerItem.itemType,
-                        consideration.itemType
-                    );
-                } else {
-                    require(
-                        collections[offerItem.token],
-                        "ERROR: This collection has no permission"
-                    );
-                }
-
                 _marketFee =
                     (consideration.startAmount *
                         fees[offerItem.token].marketFee) /
@@ -165,58 +148,31 @@ contract Market is
                 _totalFee = _marketFee + _projectFee + _ipFee;
 
                 if (consideration.itemType == ItemType.NATIVE) {
-                    require(
-                        msg.value >= consideration.startAmount,
-                        "TX value error"
-                    );
                     payable(marketVault).transfer(_marketFee);
                     payable(projectVault).transfer(_projectFee);
                     payable(ipVault).transfer(_ipFee);
                 } else {
-                    require(
-                        IERC20Upgradeable(consideration.token).transferFrom(
-                            msg.sender,
-                            marketVault,
-                            _marketFee
-                        ),
-                        "ERC20 market fee error"
+                    IERC20Upgradeable(consideration.token).safeTransferFrom(
+                        msg.sender,
+                        marketVault,
+                        _marketFee
                     );
-                    require(
-                        IERC20Upgradeable(consideration.token).transferFrom(
-                            msg.sender,
-                            projectVault,
-                            _projectFee
-                        ),
-                        "ERC20 project fee error"
+
+                    IERC20Upgradeable(consideration.token).safeTransferFrom(
+                        msg.sender,
+                        projectVault,
+                        _projectFee
                     );
-                    require(
-                        IERC20Upgradeable(consideration.token).transferFrom(
-                            msg.sender,
-                            ipVault,
-                            _ipFee
-                        ),
-                        "ERC20 ip fee error"
+                    IERC20Upgradeable(consideration.token).safeTransferFrom(
+                        msg.sender,
+                        ipVault,
+                        _ipFee
                     );
                 }
             } else if (
                 // offer
-                offerItem.itemType == ItemType.NATIVE ||
                 offerItem.itemType == ItemType.ERC20
             ) {
-                require(
-                    collections[consideration.token],
-                    "ERROR: This collection has no permission"
-                );
-                // or
-                // if (
-                //     consideration.itemType == ItemType.NATIVE ||
-                //     consideration.itemType == ItemType.ERC20
-                // ) {
-                //     revert OrderTypeError(
-                //         offerItem.itemType,
-                //         consideration.itemType
-                //     );
-                // }
                 _marketFee =
                     (offerItem.startAmount *
                         fees[consideration.token].marketFee) /
@@ -230,126 +186,144 @@ contract Market is
                     10000;
                 _totalFee = _marketFee + _projectFee + _ipFee;
 
-                if (offerItem.itemType == ItemType.NATIVE) {
-                    // ETH can't approve
-                    revert OrderTypeError(
-                        offerItem.itemType,
-                        consideration.itemType
-                    );
-                } else {
-                    require(
-                        IERC20Upgradeable(offerItem.token).transferFrom(
-                            order.offerer,
-                            marketVault,
-                            _marketFee
-                        ),
-                        "ERC20 market fee error"
-                    );
-                    require(
-                        IERC20Upgradeable(offerItem.token).transferFrom(
-                            order.offerer,
-                            projectVault,
-                            _projectFee
-                        ),
-                        "ERC20 project fee error"
-                    );
-                    require(
-                        IERC20Upgradeable(offerItem.token).transferFrom(
-                            order.offerer,
-                            ipVault,
-                            _ipFee
-                        ),
-                        "ERC20 ip fee error"
-                    );
-                }
-            } else {
-                // error 必须要有一个是Token，不支持NFT换NFT
+                IERC20Upgradeable(offerItem.token).safeTransferFrom(
+                    order.offerer,
+                    marketVault,
+                    _marketFee
+                );
+                IERC20Upgradeable(offerItem.token).safeTransferFrom(
+                    order.offerer,
+                    projectVault,
+                    _projectFee
+                );
+                IERC20Upgradeable(offerItem.token).safeTransferFrom(
+                    order.offerer,
+                    ipVault,
+                    _ipFee
+                );
+            }
+        }
+
+        // Consideration
+        if (
+            consideration.itemType == ItemType.NATIVE ||
+            consideration.itemType == ItemType.ERC20
+        ) {
+            // check offer type, NATIVE/ERC20 <-> ERC721/ERC1155
+            if (
+                offerItem.itemType != ItemType.ERC721 &&
+                offerItem.itemType != ItemType.ERC1155
+            ) {
                 revert OrderTypeError(
                     offerItem.itemType,
                     consideration.itemType
                 );
             }
-        }
 
-        /* 
-            - 转移 Consideration
-        */
-        if (consideration.itemType == ItemType.NATIVE) {
-            payable(consideration.recipient).transfer(
-                consideration.startAmount - _totalFee
-            );
-        } else if (consideration.itemType == ItemType.ERC20) {
-            require(
-                IERC20Upgradeable(consideration.token).transferFrom(
+            if (consideration.itemType == ItemType.NATIVE) {
+                require(
+                    msg.value >= consideration.startAmount,
+                    "TX value error"
+                );
+                payable(consideration.recipient).transfer(
+                    consideration.startAmount - _totalFee
+                );
+            } else if (consideration.itemType == ItemType.ERC20) {
+                IERC20Upgradeable(consideration.token).safeTransferFrom(
                     msg.sender,
                     consideration.recipient,
                     consideration.startAmount - _totalFee
-                ),
-                "Transfer erc20 consideration error"
+                );
+            }
+        } else if (
+            consideration.itemType == ItemType.ERC721 ||
+            consideration.itemType == ItemType.ERC1155
+        ) {
+            require(
+                collections[consideration.token],
+                "ERROR: This collection has no permission"
             );
-        } else if (consideration.itemType == ItemType.ERC721) {
-            IERC721Upgradeable(consideration.token).safeTransferFrom(
-                msg.sender,
-                consideration.recipient,
-                consideration.identifierOrCriteria
-            );
+            if (consideration.itemType == ItemType.ERC721) {
+                IERC721Upgradeable(consideration.token).safeTransferFrom(
+                    msg.sender,
+                    consideration.recipient,
+                    consideration.identifierOrCriteria
+                );
+            } else if (consideration.itemType == ItemType.ERC1155) {
+                IERC1155Upgradeable(consideration.token).safeTransferFrom(
+                    msg.sender,
+                    consideration.recipient,
+                    consideration.identifierOrCriteria,
+                    consideration.startAmount,
+                    "0x0"
+                );
+            }
+
             from = msg.sender;
             to = consideration.recipient;
-        } else if (consideration.itemType == ItemType.ERC1155) {
-            IERC1155Upgradeable(consideration.token).safeTransferFrom(
-                msg.sender,
-                consideration.recipient,
-                consideration.identifierOrCriteria,
-                consideration.startAmount,
-                "0x0"
-            );
-            from = msg.sender;
-            to = consideration.recipient;
+        } else {
+            // other consideration type is not support
+            revert OrderTypeError(offerItem.itemType, consideration.itemType);
         }
 
-        /* 
-            - 转移 Offer 
-         */
-        if (offerItem.itemType == ItemType.ERC20) {
+        // Offer
+        if (offerItem.itemType == ItemType.NATIVE) {
+            // offer's type cann't be NATIVE
+            revert OrderTypeError(offerItem.itemType, consideration.itemType);
+        } else if (offerItem.itemType == ItemType.ERC20) {
+            // check consideration type
+            if (
+                consideration.itemType != ItemType.ERC721 &&
+                consideration.itemType != ItemType.ERC1155
+            ) {
+                revert OrderTypeError(
+                    offerItem.itemType,
+                    consideration.itemType
+                );
+            }
+            IERC20Upgradeable(offerItem.token).safeTransferFrom(
+                order.offerer,
+                msg.sender,
+                offerItem.startAmount - _totalFee
+            );
+        } else if (
+            offerItem.itemType == ItemType.ERC721 ||
+            offerItem.itemType == ItemType.ERC1155
+        ) {
             require(
-                IERC20Upgradeable(offerItem.token).transferFrom(
+                collections[offerItem.token],
+                "ERROR: This collection has no permission"
+            );
+
+            if (offerItem.itemType == ItemType.ERC721) {
+                IERC721Upgradeable(offerItem.token).safeTransferFrom(
                     order.offerer,
                     msg.sender,
-                    offerItem.startAmount - _totalFee
-                ),
-                "Transfer erc20 offer error"
-            );
-        } else if (offerItem.itemType == ItemType.ERC721) {
-            IERC721Upgradeable(offerItem.token).safeTransferFrom(
-                order.offerer,
-                msg.sender,
-                offerItem.identifierOrCriteria
-            );
+                    offerItem.identifierOrCriteria
+                );
+            } else if (offerItem.itemType == ItemType.ERC1155) {
+                IERC1155Upgradeable(offerItem.token).safeTransferFrom(
+                    order.offerer,
+                    msg.sender,
+                    offerItem.identifierOrCriteria,
+                    offerItem.startAmount,
+                    "0x0"
+                );
+            }
+
             from = order.offerer;
             to = msg.sender;
-        } else if (offerItem.itemType == ItemType.ERC1155) {
-            IERC1155Upgradeable(offerItem.token).safeTransferFrom(
-                order.offerer,
-                msg.sender,
-                offerItem.identifierOrCriteria,
-                offerItem.startAmount,
-                "0x0"
-            );
-            from = order.offerer;
-            to = msg.sender;
+        } else {
+            // other offer type is not support
+            revert OrderTypeError(offerItem.itemType, consideration.itemType);
         }
 
-        /* 
-            - 更改关键状态
-         */
         _orderStatus.isValidated = true;
 
-        // 增加 from to
         emit Sold(orderHash, order.salt, block.timestamp, from, to);
     }
 
-    //  取消一组订单
-    function cancel(OrderComponents[] calldata orders) external {
+    function cancel(OrderComponents[] calldata orders) external nonReentrant {
         OrderStatus storage _orderStatus;
         address offerer;
 
@@ -393,22 +367,20 @@ contract Market is
         }
     }
 
-    // 增加计数器，取消所有的订单
-    // function incrementCounter() external {
-    //     counters[msg.sender]++;
-    //     emit CounterIncremented(counters[msg.sender], msg.sender);
-    // }
-
-    // 配置collection
     function setCollection(
         address collection,
         bool permission
     ) public onlyOwner {
+        require(
+            marketVault != address(0) &&
+                projectVault != address(0) &&
+                ipVault != address(0),
+            "ERROR: vault is empty"
+        );
         collections[collection] = permission;
         emit SetCollection(collection, permission);
     }
 
-    // 配置零Fee白名单
     function setWhiteList(
         address[] calldata users,
         bool[] calldata permissions
@@ -419,7 +391,6 @@ contract Market is
         emit SetWhiteList(users, permissions);
     }
 
-    // 配置fee
     function setFees(
         address collectionAddress,
         CollectionFee calldata fees_
@@ -454,24 +425,6 @@ contract Market is
         marketVault = marketVault_;
         projectVault = projectVault_;
         ipVault = ipVault_;
-    }
-
-    function onERC721Received(
-        address,
-        address,
-        uint,
-        bytes calldata
-    ) external pure returns (bytes4) {
-        return this.onERC721Received.selector;
-    }
-
-    function onERC1155Received(
-        address,
-        address,
-        uint,
-        uint,
-        bytes calldata
-    ) external pure returns (bytes4) {
-        return this.onERC1155Received.selector;
+        emit SetVaults(marketVault_, projectVault_, ipVault_);
     }
 }
